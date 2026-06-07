@@ -12,7 +12,7 @@
 
 #define P3
 #define SAMPLES        30   /* number of samples per sequence, more is better (up to 100) */
-#define CALC_BYTES     3     /* how many PIN bytes to calculate (1 to 4), the rest is brute-forced */
+#define CALC_BYTES     4    /* how many PIN bytes to calculate (1 to 4), the rest is brute-forced */
 #define CEM_PN_AUTODETECT    /* comment out for P2 CEM-L on the bench w/o DIM */
 #define LAT_ONLY             /* choose candidates by latency only (vs latency/standard deviation) */
 //#define  DUMP_BUCKETS                               /* dump all buckets for debugging */
@@ -21,6 +21,7 @@
 
 #include <stdio.h>
 #include <FlexCAN_T4.h>
+#include <LiquidCrystal.h>
 
 #if !defined(__IMXRT1062__)
 #error Unsupported Teensy model, need 4.0
@@ -47,13 +48,13 @@ typedef enum {
   CAN_LS        /* low-speed bus */
 } can_bus_id_t;
 
-#include <LiquidCrystal.h>
+//#include <LiquidCrystal.h>
 
 const int rs = 9, en = 8, d4 = 7, d5 = 6, d6 = 5, d7 = 4;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
-#define	LCD_ROWS 2
-#define LCD_COLS 16
+#define	LCD_ROWS 4
+#define LCD_COLS 20
 
 
 #define lcd_printf(x, y, fmt, args...) { \
@@ -82,9 +83,9 @@ unsigned char  shuffle_orders[4][PIN_LEN] = { { 0, 1, 2, 3, 4, 5 }, { 3, 1, 5, 0
 unsigned char *shuffle_order;
 
 struct _cem_params {
-  unsigned long part_number;
-  int baud;
-  int shuffle;
+  uint32_t part_number;
+  uint32_t baud;
+  uint32_t shuffle;
 } cem_params[] = {
 // P1
   { 8690719,  CAN_500KBPS, 0 },
@@ -143,7 +144,11 @@ struct _cem_params {
   { 31394157, CAN_500KBPS, 1 },
   { 30786579, CAN_500KBPS, 1 },
 // P3
-  { 30765624, CAN_500KBPS, 0 }  
+  { 30765624, CAN_500KBPS, 0 },
+  { 30786575, CAN_500KBPS, 0 },
+  { 31376071, CAN_500KBPS, 0 },
+  { 31296577, CAN_500KBPS, 0 },
+  { 31376238, CAN_500KBPS, 0 },
 };
 
 /* measured latencies are stored for each of possible value of a single PIN digit */
@@ -834,12 +839,7 @@ void cemCrackPin (uint32_t maxBytes, bool verbose)
 
   /* profile the CEM to see how fast it can process requests */
 
-  printf ("Profiling CEM\n");
-    lcd_printf (0, 1, "Profiling CEM   ");
   crackRate = profileCemResponse ();
-
-   printf ("Calculating bytes 0-%u\n", maxBytes - 1);
-   lcd_printf (0, 1, "Bytes 0-%lu       ", maxBytes - 1);
 
   /* start time */
 
@@ -941,7 +941,7 @@ void cemCrackPin (uint32_t maxBytes, bool verbose)
     uint32_t can_id = 0;
 
     printf ("Validating PIN\n");
-    lcd_printf (0, 1, "Validating PIN  ");
+    // vlcd_printf (0, 2, "Validating PIN  ");
 
     /* send the unlock request to the CEM */
 
@@ -967,22 +967,18 @@ void cemCrackPin (uint32_t maxBytes, bool verbose)
     if ((can_id == 3) &&
       (data[0] == CEM_HS_ECU_ID) && (data[1] == 0xB9) && (data[2] == 0x00)) {
       printf ("PIN verified.\n");
-      //lcd_printf (0,0,"PIN verified.\n");
 
-      //lcd_printf (0, 0, "PIN: %02x %02x %02x  ", pinUsed[0], pinUsed[1], pinUsed[2]);
-     // lcd_printf (0, 1, "     %02x %02x %02x  ", pinUsed[3], pinUsed[4], pinUsed[5]);
+      
     } else {
       printf ("PIN verification failed!\n");
 
-      //lcd_printf (0, 1, "PIN: failed     ");
      }
-     } //else {
-    //lcd_printf (0, 1, "PIN: not cracked");
+  
+    lcd_printf (0, 1, "PIN: not cracked");
       
-  //}
+  }
    printf ("done\n");
 
-   //return (false);
   }
 
 void can_hs_event (const CAN_message_t &msg)
@@ -1155,7 +1151,7 @@ again:
     ret = 0;
   }
 
-out:
+//out:
   return ret;
 }
 
@@ -1185,8 +1181,11 @@ retry:
         diff = (now - last) /  (1000 * clockCyclesPerMicrosecond());
         if (verbose || diff >= 1000) {
           printf("SEED %02x %02x %02x, PIN %02x %02x %02x %02x %02x, KEY %02x %02x %02x, %d pins/s\n", seed[0], seed[1], seed[2], pin[0], pin[1], pin[2], pin[3], pin[4], key[0], key[1], key[2], i);
-          lcd_printf(0,0,"  PIN %02x %02x   ",pin[0],pin[1], i);
-          lcd_printf(0,1, "   %02x %02x %02x    ",pin[2],pin[3],pin[4]);
+          lcd_printf(0,0,"   Wyszukiwanie   ");
+          lcd_printf(0,1,"SEED %02x %02x %02x ", seed[0], seed[1], seed[2]);
+          lcd_printf(0,2,"PIN %02x %02x  %02x %02x %02x",pin[0],pin[1],pin[2],pin[3],pin[4]);
+          lcd_printf(0,3,"KEY %02x %02x %02x", key[0], key[1], key[2])
+          
                
           last = now;
           i = 0;
@@ -1207,8 +1206,10 @@ retry:
 out:
   printf("hash collision found\n");
   printf("SEED %02x %02x %02x, PIN %02x %02x %02x %02x %02x, KEY %02x %02x %02x, %d pins/s\n", seed[0], seed[1], seed[2], pin[0], pin[1], pin[2], pin[3], pin[4], key[0], key[1], key[2], i);
-  lcd_printf(0,0,"  PIN %02x %02x   ",pin[0],pin[1], i);
-  lcd_printf(0,1, "     %02x %02x %02x  ",pin[2],pin[3],pin[4]);
+  lcd_printf(0,0,"hash collision found");
+  lcd_printf(0,1,"SEED %02x %02x %02x " , seed[0], seed[1], seed[2]);
+  lcd_printf(0,2,"PIN %02x %02x  %02x %02x %02x",pin[0],pin[1],pin[2],pin[3],pin[4]);
+  lcd_printf(0,3,"KEY %02x %02x %02x", key[0], key[1], key[2]);
   
   memcpy(_seed, seed, 3);
   memcpy(_key, key, 3);
@@ -1236,14 +1237,16 @@ bool initialized = false;
 
 void setup (void)
 {
-  bool hs_inited = false;
+   
    /* initialize the LCD display */
 
   lcd.begin (LCD_COLS, LCD_ROWS);
   lcd.clear ();
-  lcd.setCursor (0, 0);
+  
 
-  lcd_printf (0, 0, "Initialzing...  ");
+  lcd_printf (0, 0, "   ** START  ** ");
+  //bool hs_inited = false;
+
   /* set up the serial port */
 
   Serial.begin(115200);
@@ -1268,19 +1271,27 @@ void setup (void)
 
 #ifdef P3
   printf("Cracking P3\n");
-#else
+
   printf ("PIN bytes to measure:    %u\n", CALC_BYTES);
   printf ("Number of samples:       %u\n", SAMPLES);
+  printf("Can't find part number on CAN-LS, trying CAN-HS at 500 Kbps\n");
+    //lcd_printf (0, 0, "Unknown CEM       ");
+   //lcd_printf (0, 2, "Exiting......   ");
+   //lcd_printf (0, 2, "CAN_HS error    ");
+   //lcd_printf (0, 1, "CAN_LS error    ");
 #endif
 
-  long pn = 0;
+  
 
 #ifdef P3
   can_ls_init(CAN_125KBPS);
   can_hs_init(CAN_500KBPS);
   can_prog_mode();
-#else
+ #else 
+
 #if defined(CEM_PN_AUTODETECT)
+  
+
   can_hs.begin();
   k_line_keep_alive();
   delay(1000);
@@ -1288,15 +1299,19 @@ void setup (void)
   k_line_keep_alive();
   pn = ecu_read_part_number(CAN_LS, CEM_LS_ECU_ID);
 
-  if (!pn) {// might be CEM-L
+    if (!pn) { P3
     printf("Can't find part number on CAN-LS, trying CAN-HS at 500 Kbps\n");
-    lcd_printf (0, 0, "CAN_LS error    ");
+    //lcd_printf(0,0,"Can't find part number on CAN-LS, trying CAN-HS at 500 Kbps\n");
+      //lcd_printf (0, 0, "Unknown CEM       ");
+   //lcd_printf (0, 1, "Exiting......     ");
+   //lcd_printf (0, 2, "CAN_HS error    ");
+    //lcd_printf (0, 2, "CAN_LS error      ");
 
     can_hs_init(CAN_500KBPS);
     hs_inited = true;
     pn = ecu_read_part_number(CAN_HS, CEM_HS_ECU_ID);
   }
-#else
+  #else
   can_ls_init(CAN_125KBPS);
   can_hs_init(CAN_500KBPS);
   can_prog_mode();
@@ -1304,13 +1319,13 @@ void setup (void)
 #endif
 
   struct _cem_params hs_params;
-  if (!pn || !find_cem_params(pn, &hs_params)) {
-    printf("Unknown CEM part number %lu. Don't know what to do.\n", pn);
-    lcd_printf (0, 0, "Unknown CEM     ");
-    lcd_printf (0, 1, "Exiting......   ");
+  if (!pn ||((p_hs_params = find_cem_params(pn, &hs_params)) {
+    printf("Unknown CEM part number %u. Don't know what to do.\n", pn);
+    //lcd_printf (0, 0, "Unknown CEM     ");
+    //lcd_printf (0, 1, "Exiting......   ");
     return;
   }
-   lcd.clear ();
+    lcd.clear ();
     lcd_printf (0, 0, "CEM: %lu", pn);
 
   shuffle_order = shuffle_orders[hs_params.shuffle];
@@ -1320,8 +1335,6 @@ void setup (void)
 #if defined(CEM_PN_AUTODETECT)
   if (!hs_inited)
     can_hs_init(hs_params.baud);
-
-     lcd_printf (0, 1, "Enter PROG mode.");
 
   can_prog_mode();
   if (!hs_inited)
@@ -1341,7 +1354,7 @@ void setup (void)
 
 void loop (void)
 {
-  bool verbose = false;
+  
 
   if (initialized)
 #ifdef P3
